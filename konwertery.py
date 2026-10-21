@@ -86,7 +86,7 @@ def json_na_csv(plik):
 
     bufor = io.StringIO(newline="")
 
-    zapis = csv.DictWriter(bufor, fieldnames=naglowki)
+    zapis = csv.DictWriter(bufor, fieldnames=naglowki, delimiter=";")
     zapis.writeheader()
     zapis.writerows(dane)
 
@@ -132,10 +132,16 @@ def konwertuj(wejscie, wyjscie, nadpisz=False):
 
     tryb = "w" if nadpisz else "x"
 
+    kodowanie = (
+        "utf-8-sig"
+        if wyjscie.suffix.lower() == ".csv"
+        else "utf-8"
+    )
+
     with wyjscie.open(
-        tryb,
-        encoding="utf-8",
-        newline=""
+            tryb,
+            encoding=kodowanie,
+            newline=""
     ) as plik:
         plik.write(wynik)
 
