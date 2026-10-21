@@ -31,7 +31,11 @@ py main.py dane.csv wynik.json --nadpisz
 - ODT → PDF.
 
 ## Zasady danych
-- Kodowanie UTF-8, poprawna obsługa polskich znaków.
+- Pliki wejściowe są odczytywane w UTF-8, również z BOM.
+- Wynikowy JSON jest zapisywany w UTF-8.
+- Wynikowy CSV jest zapisywany w UTF-8 z BOM, aby Excel poprawnie rozpoznawał polskie znaki.
+- Odczyt CSV obsługuje przecinek, średnik i tabulator.
+- Wynikowy CSV używa średnika jako separatora kolumn.
 - Pierwszy wiersz CSV zawiera unikalne, niepuste nagłówki.
 - CSV musi zawierać przynajmniej jeden rekord.
 - JSON musi być niepustą listą obiektów o takich samych kluczach.
