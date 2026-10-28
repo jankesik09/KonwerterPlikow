@@ -1,11 +1,16 @@
 import csv
 import io
 import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 
-def csv_na_json(plik):
-    tekst = plik.read_text(encoding="utf-8-sig")
+def csv_na_json(wejscie, wyjscie):
+    tekst = wejscie.read_text(encoding="utf-8-sig")
 
     try:
         separator = csv.Sniffer().sniff(
@@ -46,12 +51,15 @@ def csv_na_json(plik):
     if not dane:
         raise ValueError("CSV musi zawierać przynajmniej jeden rekord.")
 
-    return json.dumps(dane, ensure_ascii=False, indent=4)
+    wynik = json.dumps(dane, ensure_ascii=False, indent=4)
+    wyjscie.write_text(wynik, encoding="utf-8")
 
 
-def json_na_csv(plik):
+def json_na_csv(wejscie, wyjscie):
     try:
-        dane = json.loads(plik.read_text(encoding="utf-8-sig"))
+        dane = json.loads(
+            wejscie.read_text(encoding="utf-8-sig")
+        )
     except json.JSONDecodeError as blad:
         raise ValueError(
             f"Błędny JSON: wiersz {blad.lineno}, "
@@ -84,18 +92,142 @@ def json_na_csv(plik):
                     "Zagnieżdżone obiekty i listy nie są obsługiwane."
                 )
 
-    bufor = io.StringIO(newline="")
+    with wyjscie.open(
+        "w",
+        encoding="utf-8-sig",
+        newline=""
+    ) as plik:
+        zapis = csv.DictWriter(
+            plik,
+            fieldnames=naglowki,
+            delimiter=";"
+        )
+        zapis.writeheader()
+        zapis.writerows(dane)
 
-    zapis = csv.DictWriter(bufor, fieldnames=naglowki, delimiter=";")
-    zapis.writeheader()
-    zapis.writerows(dane)
 
-    return bufor.getvalue()
+def pobierz_document():
+    try:
+        from docx import Document
+    except ImportError as blad:
+        raise ValueError(
+            "Brakuje biblioteki python-docx. "
+            "W terminalu wykonaj: py -m pip install python-docx"
+        ) from blad
 
+    return Document
+
+
+def txt_na_docx(wejscie, wyjscie):
+    Document = pobierz_document()
+
+    tekst = wejscie.read_text(encoding="utf-8-sig")
+    dokument = Document()
+
+    # Każda linia TXT staje się osobnym akapitem.
+    for linia in tekst.split("\n"):
+        dokument.add_paragraph(linia)
+
+    dokument.save(str(wyjscie))
+
+
+def docx_na_txt(wejscie, wyjscie):
+    Document = pobierz_document()
+
+    try:
+        dokument = Document(str(wejscie))
+    except Exception as blad:
+        raise ValueError(
+            "Nie można odczytać DOCX. "
+            "Sprawdź, czy plik otwiera się w Wordzie."
+        ) from blad
+
+    # Odczyt zwykłych akapitów głównej treści dokumentu.
+    tekst = "\n".join(
+        akapit.text for akapit in dokument.paragraphs
+    )
+
+    wyjscie.write_text(tekst, encoding="utf-8")
+
+
+def konwersja_przez_word(wejscie, wyjscie):
+    if sys.platform != "win32":
+        raise ValueError(
+            "Konwersja przez Microsoft Word wymaga Windows."
+        )
+
+    skrypt = Path(__file__).resolve().with_name("word_pdf.py")
+
+    if not skrypt.is_file():
+        raise ValueError(
+            "Brakuje pliku word_pdf.py. "
+            "Umieść go obok main.py i konwertery.py."
+        )
+
+    polecenie = [
+        sys.executable,
+        str(skrypt),
+        str(wejscie.resolve()),
+        str(wyjscie.resolve()),
+    ]
+
+    srodowisko = os.environ.copy()
+    srodowisko["PYTHONIOENCODING"] = "utf-8"
+
+    try:
+        wynik = subprocess.run(
+            polecenie,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=srodowisko,
+            timeout=90,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired as blad:
+        raise ValueError(
+            "Word nie zakończył konwersji w ciągu 90 sekund. "
+            "Sprawdź, czy nie oczekuje potwierdzenia "
+            "lub aktywacji. Możesz też spróbować "
+            "otworzyć plik ręcznie w Wordzie."
+        ) from blad
+
+    if wynik.returncode != 0:
+        komunikat = (
+            wynik.stderr.strip()
+            or wynik.stdout.strip()
+            or "Proces konwersji zakończył się błędem."
+        )
+        raise ValueError(komunikat)
+
+    if not wyjscie.is_file() or wyjscie.stat().st_size == 0:
+        raise ValueError("Word nie utworzył pliku wynikowego.")
+
+    if wyjscie.suffix.lower() == ".pdf":
+        with wyjscie.open("rb") as plik:
+            if plik.read(5) != b"%PDF-":
+                raise ValueError(
+                    "Utworzony plik nie ma nagłówka PDF."
+                )
+
+    elif wyjscie.suffix.lower() == ".docx":
+        Document = pobierz_document()
+
+        try:
+            Document(str(wyjscie))
+        except Exception as blad:
+            raise ValueError(
+                "Word nie utworzył poprawnego dokumentu DOCX."
+            ) from blad
 
 KONWERTERY = {
     (".csv", ".json"): csv_na_json,
     (".json", ".csv"): json_na_csv,
+    (".txt", ".docx"): txt_na_docx,
+    (".docx", ".txt"): docx_na_txt,
+    (".docx", ".pdf"): konwersja_przez_word,
+    (".pdf", ".docx"): konwersja_przez_word,
 }
 
 
@@ -122,27 +254,53 @@ def konwertuj(wejscie, wyjscie, nadpisz=False):
     if wejscie.resolve() == wyjscie.resolve():
         raise ValueError("Plik wynikowy musi różnić się od wejściowego.")
 
-    para = (wejscie.suffix.lower(), wyjscie.suffix.lower())
-
-    if para not in KONWERTERY:
-        raise ValueError("Obsługiwane konwersje: CSV → JSON i JSON → CSV.")
-
-    # Najpierw sprawdzamy dane, dopiero później zapisujemy wynik.
-    wynik = KONWERTERY[para](wejscie)
-
-    tryb = "w" if nadpisz else "x"
-
-    kodowanie = (
-        "utf-8-sig"
-        if wyjscie.suffix.lower() == ".csv"
-        else "utf-8"
+    para = (
+        wejscie.suffix.lower(),
+        wyjscie.suffix.lower()
     )
 
-    with wyjscie.open(
-            tryb,
-            encoding=kodowanie,
-            newline=""
-    ) as plik:
-        plik.write(wynik)
+    if para not in KONWERTERY:
+        raise ValueError("Wybrana konwersja nie jest obsługiwana.")
+
+    if wyjscie.exists() and not nadpisz:
+        raise ValueError(
+            "Plik wynikowy już istnieje. "
+            "Wybierz inną nazwę lub potwierdź nadpisanie."
+        )
+
+    try:
+        # Wynik powstaje najpierw w katalogu tymczasowym.
+        # Błąd konwersji nie niszczy poprzedniego wyniku.
+        with tempfile.TemporaryDirectory(
+            dir=str(wyjscie.parent)
+        ) as katalog:
+            tymczasowy = Path(katalog) / (
+                "wynik" + wyjscie.suffix.lower()
+            )
+
+            KONWERTERY[para](wejscie, tymczasowy)
+
+            if not tymczasowy.is_file():
+                raise ValueError("Konwerter nie utworzył pliku.")
+
+            if nadpisz:
+                os.replace(tymczasowy, wyjscie)
+            else:
+                # Tryb xb blokuje przypadkowe nadpisanie.
+                with wyjscie.open("xb") as cel:
+                    try:
+                        with tymczasowy.open("rb") as zrodlo:
+                            shutil.copyfileobj(zrodlo, cel)
+                    except Exception:
+                        cel.close()
+                        wyjscie.unlink(missing_ok=True)
+                        raise
+
+    except (ValueError, OSError, UnicodeError, csv.Error):
+        raise
+    except Exception as blad:
+        raise ValueError(
+            f"Konwersja nie powiodła się: {blad}"
+        ) from blad
 
     return wyjscie

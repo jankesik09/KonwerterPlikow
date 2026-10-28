@@ -1,0 +1,11 @@
+Konwerter plików — laboratorium 3
+Autor: Maciej Jankowski
+
+To jest przykładowy dokument tekstowy.
+Program zamieni go na dokument Word.
+
+Sprawdzenie polskich znaków:
+ą ć ę ł ń ó ś ź ż
+Łódź, Kraków, Gdańsk.
+
+Następnie dokument Word zostanie przekonwertowany na PDF.

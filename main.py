@@ -2,6 +2,7 @@ import argparse
 import csv
 import sys
 import tkinter as tk
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -10,14 +11,20 @@ from konwertery import dostepne_formaty, konwertuj
 
 def uruchom_okno():
     okno = tk.Tk()
-    okno.title("Konwerter plików — Lab 2")
-    okno.geometry("720x380")
-    okno.minsize(620, 380)
+    okno.title("Konwerter plików — Lab 3")
+    okno.geometry("760x410")
+    okno.minsize(650, 410)
 
     plik_wejsciowy = tk.StringVar()
     katalog_zapisu = tk.StringVar()
     format_docelowy = tk.StringVar()
-    status = tk.StringVar(value="Wybierz plik CSV lub JSON.")
+
+    status = tk.StringVar(
+        value="Wybierz plik CSV, JSON, TXT, DOCX lub PDF."
+    )
+
+    wykonawca = ThreadPoolExecutor(max_workers=1)
+    trwa_konwersja = False
 
     ramka = ttk.Frame(okno, padding=25)
     ramka.pack(fill="both", expand=True)
@@ -28,7 +35,16 @@ def uruchom_okno():
             parent=okno,
             title="Wybierz plik do konwersji",
             filetypes=[
-                ("Pliki CSV i JSON", "*.csv *.json *.CSV *.JSON"),
+                (
+                    "Obsługiwane pliki",
+                    "*.csv *.json *.txt *.docx *.pdf "
+                    "*.CSV *.JSON *.TXT *.DOCX *.PDF"
+                ),
+                ("Pliki CSV", "*.csv"),
+                ("Pliki JSON", "*.json"),
+                ("Pliki tekstowe", "*.txt"),
+                ("Dokumenty Word", "*.docx"),
+                ("Dokumenty PDF", "*.pdf"),
                 ("Wszystkie pliki", "*.*"),
             ],
         )
@@ -49,7 +65,7 @@ def uruchom_okno():
         else:
             format_docelowy.set("")
             przycisk_konwersji["state"] = "disabled"
-            status.set("Nieobsługiwany format. Wybierz CSV lub JSON.")
+            status.set("Ten format nie jest obsługiwany.")
 
     def wybierz_katalog():
         sciezka = filedialog.askdirectory(
@@ -60,7 +76,52 @@ def uruchom_okno():
         if sciezka:
             katalog_zapisu.set(sciezka)
 
+    def ustaw_stan_pracy(pracuje):
+        stan = "disabled" if pracuje else "normal"
+
+        przycisk_pliku["state"] = stan
+        przycisk_katalogu["state"] = stan
+        przycisk_konwersji["state"] = stan
+
+        lista_formatow["state"] = (
+            "disabled" if pracuje else "readonly"
+        )
+
+    def sprawdz_wynik(zadanie):
+        nonlocal trwa_konwersja
+
+        if not zadanie.done():
+            okno.after(
+                100,
+                lambda: sprawdz_wynik(zadanie)
+            )
+            return
+
+        trwa_konwersja = False
+        ustaw_stan_pracy(False)
+
+        try:
+            wynik = zadanie.result()
+        except Exception as blad:
+            status.set("Konwersja nie powiodła się.")
+
+            messagebox.showerror(
+                "Błąd konwersji",
+                str(blad),
+                parent=okno,
+            )
+        else:
+            status.set(f"Zapisano plik: {wynik.name}")
+
+            messagebox.showinfo(
+                "Gotowe",
+                f"Konwersja zakończona.\n\nZapisano:\n{wynik}",
+                parent=okno,
+            )
+
     def wykonaj_konwersje():
+        nonlocal trwa_konwersja
+
         if not plik_wejsciowy.get():
             messagebox.showerror(
                 "Brak pliku",
@@ -93,91 +154,131 @@ def uruchom_okno():
             )
 
             if not nadpisz:
-                status.set("Anulowano. Możesz wybrać inny katalog.")
+                status.set(
+                    "Anulowano. Możesz wybrać inny katalog."
+                )
                 return
 
-        status.set("Trwa konwersja…")
-        okno.update_idletasks()
+        trwa_konwersja = True
+        ustaw_stan_pracy(True)
+        status.set("Trwa konwersja. Proszę czekać…")
 
-        try:
-            wynik = konwertuj(wejscie, wyjscie, nadpisz)
-        except (ValueError, OSError, UnicodeError, csv.Error) as blad:
-            status.set("Konwersja nie powiodła się.")
+        # Konwersja odbywa się poza głównym wątkiem GUI.
+        zadanie = wykonawca.submit(
+            konwertuj,
+            wejscie,
+            wyjscie,
+            nadpisz,
+        )
 
-            messagebox.showerror(
-                "Błąd konwersji",
-                str(blad),
-                parent=okno,
-            )
-        else:
-            status.set(f"Zapisano plik: {wynik.name}")
+        okno.after(
+            100,
+            lambda: sprawdz_wynik(zadanie)
+        )
 
+    def zamknij_okno():
+        if trwa_konwersja:
             messagebox.showinfo(
-                "Gotowe",
-                f"Konwersja zakończona.\n\nZapisano:\n{wynik}",
+                "Trwa konwersja",
+                "Poczekaj na zakończenie konwersji.",
                 parent=okno,
             )
+            return
+
+        wykonawca.shutdown(wait=False)
+        okno.destroy()
 
     ttk.Label(
         ramka,
-        text="Konwerter CSV ↔ JSON",
+        text="Konwerter plików",
         font=("Segoe UI", 20, "bold"),
     ).grid(
         row=0,
         column=0,
         columnspan=2,
         sticky="w",
-        pady=(0, 20),
+    )
+
+    ttk.Label(
+        ramka,
+        text="CSV ↔ JSON | TXT ↔ DOCX | DOCX ↔ PDF",
+
+    ).grid(
+        row=1,
+        column=0,
+        columnspan=2,
+        sticky="w",
+        pady=(4, 20),
     )
 
     ttk.Label(
         ramka,
         text="Plik wejściowy:",
-    ).grid(row=1, column=0, sticky="w")
+    ).grid(row=2, column=0, sticky="w")
 
     ttk.Entry(
         ramka,
         textvariable=plik_wejsciowy,
         state="readonly",
     ).grid(
-        row=2,
+        row=3,
         column=0,
         sticky="ew",
         padx=(0, 12),
     )
 
-    ttk.Button(
+    przycisk_pliku = ttk.Button(
         ramka,
         text="Wybierz plik…",
         command=wybierz_plik,
-    ).grid(row=2, column=1, sticky="ew")
+    )
+    przycisk_pliku.grid(
+        row=3,
+        column=1,
+        sticky="ew",
+    )
 
     ttk.Label(
         ramka,
         text="Katalog zapisu:",
-    ).grid(row=3, column=0, sticky="w", pady=(18, 0))
+    ).grid(
+        row=4,
+        column=0,
+        sticky="w",
+        pady=(18, 0),
+    )
 
     ttk.Entry(
         ramka,
         textvariable=katalog_zapisu,
         state="readonly",
     ).grid(
-        row=4,
+        row=5,
         column=0,
         sticky="ew",
         padx=(0, 12),
     )
 
-    ttk.Button(
+    przycisk_katalogu = ttk.Button(
         ramka,
         text="Wybierz katalog…",
         command=wybierz_katalog,
-    ).grid(row=4, column=1, sticky="ew")
+    )
+    przycisk_katalogu.grid(
+        row=5,
+        column=1,
+        sticky="ew",
+    )
 
     ttk.Label(
         ramka,
         text="Format docelowy:",
-    ).grid(row=5, column=0, sticky="w", pady=(18, 0))
+    ).grid(
+        row=6,
+        column=0,
+        sticky="w",
+        pady=(18, 0),
+    )
 
     lista_formatow = ttk.Combobox(
         ramka,
@@ -185,7 +286,11 @@ def uruchom_okno():
         state="readonly",
         width=15,
     )
-    lista_formatow.grid(row=6, column=0, sticky="w")
+    lista_formatow.grid(
+        row=7,
+        column=0,
+        sticky="w",
+    )
 
     przycisk_konwersji = ttk.Button(
         ramka,
@@ -193,36 +298,46 @@ def uruchom_okno():
         command=wykonaj_konwersje,
         state="disabled",
     )
-    przycisk_konwersji.grid(row=6, column=1, sticky="ew")
+    przycisk_konwersji.grid(
+        row=7,
+        column=1,
+        sticky="ew",
+    )
 
     ttk.Label(
         ramka,
         textvariable=status,
-        wraplength=630,
+        wraplength=650,
     ).grid(
-        row=7,
+        row=8,
         column=0,
         columnspan=2,
         sticky="w",
         pady=(25, 0),
     )
 
+    okno.protocol("WM_DELETE_WINDOW", zamknij_okno)
     okno.mainloop()
 
 
 def main():
-    # Uruchomienie bez argumentów otwiera okienko.
     if len(sys.argv) == 1:
         uruchom_okno()
         return 0
 
-    # Tryb terminalowy wymagany na Lab 2.
     parser = argparse.ArgumentParser(
-        description="Konwerter CSV ↔ JSON"
+        description="Konwerter CSV, JSON, TXT, DOCX i PDF"
     )
 
-    parser.add_argument("wejscie", help="Ścieżka pliku wejściowego")
-    parser.add_argument("wyjscie", help="Ścieżka pliku wynikowego")
+    parser.add_argument(
+        "wejscie",
+        help="Ścieżka pliku wejściowego"
+    )
+
+    parser.add_argument(
+        "wyjscie",
+        help="Ścieżka pliku wynikowego"
+    )
 
     parser.add_argument(
         "--nadpisz",
