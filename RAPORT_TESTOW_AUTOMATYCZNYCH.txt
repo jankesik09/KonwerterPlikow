@@ -1,0 +1,40 @@
+RAPORT TESTOW AUTOMATYCZNYCH
+Konwerter plikow
+
+Data: 2026-11-09T20:31:28.077552+01:00
+Python: 3.13.5
+System: Windows-11-10.0.26300-SP0
+
+Liczba testow: 20
+Niepowodzenia: 0
+Bledy: 0
+Pominiete: 0
+
+Testy procesu Worda korzystaja z symulacji.
+Rzeczywiste DOCX/PDF i GUI wymagaja testow recznych.
+
+test_blad_narzedzia_zewnetrznego (__main__.TestKonwertera.test_blad_narzedzia_zewnetrznego) ... ok
+test_blad_nie_niszczy_poprzedniego_wyniku (__main__.TestKonwertera.test_blad_nie_niszczy_poprzedniego_wyniku) ... ok
+test_bledny_json_nie_tworz_wyniku (__main__.TestKonwertera.test_bledny_json_nie_tworz_wyniku) ... ok
+test_blokada_nadpisania (__main__.TestKonwertera.test_blokada_nadpisania) ... ok
+test_brak_katalogu_docelowego (__main__.TestKonwertera.test_brak_katalogu_docelowego) ... ok
+test_brak_pliku_wejsciowego (__main__.TestKonwertera.test_brak_pliku_wejsciowego) ... ok
+test_brak_uprawnien_do_zapisu (__main__.TestKonwertera.test_brak_uprawnien_do_zapisu) ... ok
+test_csv_json_csv_zachowuje_tresc (__main__.TestKonwertera.test_csv_json_csv_zachowuje_tresc) ... ok
+test_csv_na_json_polskie_znaki_i_pusta_wartosc (__main__.TestKonwertera.test_csv_na_json_polskie_znaki_i_pusta_wartosc) ... ok
+test_csv_nieprawidlowa_liczba_kolumn (__main__.TestKonwertera.test_csv_nieprawidlowa_liczba_kolumn) ... ok
+test_csv_powtorzone_naglowki (__main__.TestKonwertera.test_csv_powtorzone_naglowki) ... ok
+test_dostepne_formaty (__main__.TestKonwertera.test_dostepne_formaty) ... ok
+test_json_na_csv_bom_separator_i_kolejnosc (__main__.TestKonwertera.test_json_na_csv_bom_separator_i_kolejnosc) ... ok
+test_json_rozne_klucze (__main__.TestKonwertera.test_json_rozne_klucze) ... ok
+test_json_zagniezdzone_dane (__main__.TestKonwertera.test_json_zagniezdzone_dane) ... ok
+test_limit_czasu_procesu (__main__.TestKonwertera.test_limit_czasu_procesu) ... ok
+test_nadpisanie_po_zgodzie (__main__.TestKonwertera.test_nadpisanie_po_zgodzie) ... ok
+test_nieobslugiwana_para (__main__.TestKonwertera.test_nieobslugiwana_para) ... ok
+test_txt_docx_txt_polskie_znaki_i_akapity (__main__.TestKonwertera.test_txt_docx_txt_polskie_znaki_i_akapity) ... ok
+test_uszkodzony_docx (__main__.TestKonwertera.test_uszkodzony_docx) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.300s
+
+OK

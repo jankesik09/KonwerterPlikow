@@ -1,0 +1,17 @@
+[
+    {
+        "imie": "Maciej",
+        "nazwisko": "Jankowski",
+        "miasto": "Opole"
+    },
+    {
+        "imie": "Filip",
+        "nazwisko": "Nowak",
+        "miasto": "Warszawa"
+    },
+    {
+        "imie": "Kacper",
+        "nazwisko": "Gabor",
+        "miasto": "Kraków"
+    }
+]

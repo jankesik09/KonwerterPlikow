@@ -7,23 +7,38 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import logging
+import time
 
 
 def csv_na_json(wejscie, wyjscie):
     tekst = wejscie.read_text(encoding="utf-8-sig")
 
-    try:
-        separator = csv.Sniffer().sniff(
-            tekst[:8192],
-            delimiters=",;\t"
+    # Wybieramy separator na podstawie nagłówków.
+    # Błędny wiersz danych nie wpływa na wybór separatora.
+    separator = ","
+    najwiecej_kolumn = 0
+
+    for kandydat in (",", ";", "\t"):
+        probny_czytnik = csv.reader(
+            io.StringIO(tekst, newline=""),
+            delimiter=kandydat,
+            strict=True,
         )
-    except csv.Error:
-        separator = csv.excel
+
+        try:
+            probne_naglowki = next(probny_czytnik, [])
+        except csv.Error:
+            continue
+
+        if len(probne_naglowki) > najwiecej_kolumn:
+            najwiecej_kolumn = len(probne_naglowki)
+            separator = kandydat
 
     czytnik = csv.reader(
         io.StringIO(tekst, newline=""),
-        dialect=separator,
-        strict=True
+        delimiter=separator,
+        strict=True,
     )
 
     naglowki = next(czytnik, None)
@@ -241,7 +256,7 @@ def dostepne_formaty(sciezka):
     ]
 
 
-def konwertuj(wejscie, wyjscie, nadpisz=False):
+def wykonaj_konwersje(wejscie, wyjscie, nadpisz=False):
     wejscie = Path(wejscie)
     wyjscie = Path(wyjscie)
 
@@ -304,3 +319,74 @@ def konwertuj(wejscie, wyjscie, nadpisz=False):
         ) from blad
 
     return wyjscie
+
+LOGGER = logging.getLogger("konwerter")
+LOGGER.setLevel(logging.INFO)
+LOGGER.propagate = False
+
+if not LOGGER.handlers:
+    handler = logging.FileHandler(
+        Path(__file__).resolve().with_name("konwerter.log"),
+        encoding="utf-8",
+        delay=True,
+    )
+
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(message)s"
+        )
+    )
+
+    LOGGER.addHandler(handler)
+
+
+def zapisz_log(poziom, komunikat, *argumenty, exc_info=False):
+    try:
+        LOGGER.log(
+            poziom,
+            komunikat,
+            *argumenty,
+            exc_info=exc_info,
+        )
+    except OSError:
+        # Błąd zapisu logu nie powinien przerywać konwersji.
+        pass
+
+
+def konwertuj(wejscie, wyjscie, nadpisz=False):
+    start = time.perf_counter()
+
+    zapisz_log(
+        logging.INFO,
+        "START | %s -> %s | nadpisz=%s",
+        wejscie,
+        wyjscie,
+        nadpisz,
+    )
+
+    try:
+        wynik = wykonaj_konwersje(
+            wejscie,
+            wyjscie,
+            nadpisz,
+        )
+    except Exception:
+        zapisz_log(
+            logging.ERROR,
+            "BŁĄD | %s -> %s",
+            wejscie,
+            wyjscie,
+            exc_info=True,
+        )
+        raise
+
+    czas = time.perf_counter() - start
+
+    zapisz_log(
+        logging.INFO,
+        "SUKCES | %s | czas=%.3f s",
+        wynik,
+        czas,
+    )
+
+    return wynik
